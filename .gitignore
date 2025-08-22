@@ -1,0 +1,103 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+egg-info/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# mypy
+.mypy_cache/
+.dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Cython debug symbols
+cython_debug/
+
+# VS Code
+.vscode/
+
+# Log files
+*.log
+
+# Database files
+*.db
+
+# Spec files
+*.spec
+
+# HTML reports
+*.html
+
+# MacOS
+.DS_Store
+
+# Excel files
+*.xlsx
+*.xls
+
+# Ignore local packages
+build/ExtractorOdoo17/localpycs/
+
+# Ignore generated executables
+build/ExtractorOdoo17/*.pkg
+
+# Ignore analysis and tree files
+build/ExtractorOdoo17/*.toc
+build/ExtractorOdoo17/*.zip
+build/ExtractorOdoo17/*.pyz
+
+# Ignore warnings
+build/ExtractorOdoo17/warn-ExtractorOdoo17.txt
+
+# Ignore all files in __pycache__ folders
+**/__pycache__/
+
+venv
+extractor.log
+INSTRUCTIONS.md
