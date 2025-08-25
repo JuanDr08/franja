@@ -76,8 +76,9 @@ class ConfigWindow:
         """Create and configure the window."""
         self.window = tk.Toplevel(self.parent)
         self.window.title("⚙️ Configuración de Base de Datos")
-        self.window.geometry("550x500")
-        self.window.resizable(False, False)
+        self.window.geometry("650x600")
+        self.window.minsize(600, 550)  # Tamaño mínimo
+        self.window.resizable(True, True)  # Permitir redimensionar
         self.window.configure(bg='#f0f0f0')
         
         # Center window
@@ -114,8 +115,8 @@ class ConfigWindow:
     def _center_window(self):
         """Center window on screen."""
         self.window.update_idletasks()
-        width = self.window.winfo_width()
-        height = self.window.winfo_height()
+        width = 650
+        height = 600
         
         x = (self.window.winfo_screenwidth() // 2) - (width // 2)
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
@@ -252,8 +253,9 @@ class ConfigWindow:
         ttk.Button(button_frame, text="❌ Cancelar", 
                   command=self._on_close).pack(side="right")
         
-        # Configure grid weights
+        # Configure grid weights for responsive design
         main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(1, weight=1)  # Form area can expand
         self.window.columnconfigure(0, weight=1)
         self.window.rowconfigure(0, weight=1)
         

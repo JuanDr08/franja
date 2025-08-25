@@ -1,8 +1,9 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-from tkcalendar import DateEntry
+from tkinter import ttk, messagebox, filedialog, simpledialog
 import threading
 from datetime import datetime, date
+import calendar
+import tkinter.messagebox
 import logging
 import os
 from typing import Optional
@@ -12,6 +13,205 @@ from database.queries import QueryBuilder
 from utils.config_manager import ConfigManager
 from utils.excel_generator import ExcelReportGenerator
 from ui.config_window import ConfigWindow
+
+
+class SimpleDatePicker:
+    """Simple date picker dialog."""
+    
+    def __init__(self, parent, initial_date=None):
+        self.parent = parent
+        self.result = None
+        self.selected_date = initial_date or date.today()
+        
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("Seleccionar Fecha")
+        self.dialog.geometry("300x400")
+        self.dialog.resizable(False, False)
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        
+        # Center dialog
+        self._center_dialog()
+        
+        self._create_widgets()
+        
+    def _center_dialog(self):
+        """Center dialog on parent."""
+        self.dialog.update_idletasks()
+        x = self.parent.winfo_rootx() + (self.parent.winfo_width() // 2) - 150
+        y = self.parent.winfo_rooty() + (self.parent.winfo_height() // 2) - 200
+        self.dialog.geometry(f"300x400+{x}+{y}")
+    
+    def _create_widgets(self):
+        """Create calendar widgets."""
+        main_frame = ttk.Frame(self.dialog, padding="10")
+        main_frame.pack(fill='both', expand=True)
+        
+        # Year and month selection
+        control_frame = ttk.Frame(main_frame)
+        control_frame.pack(fill='x', pady=(0, 10))
+        
+        # Year
+        ttk.Label(control_frame, text="Año:").pack(side='left')
+        self.year_var = tk.StringVar(value=str(self.selected_date.year))
+        self.year_var.trace('w', lambda *args: self._update_calendar())  # Monitor changes
+        year_spin = ttk.Spinbox(control_frame, from_=2020, to=2030, 
+                               textvariable=self.year_var, width=8,
+                               command=self._update_calendar)
+        year_spin.pack(side='left', padx=(5, 15))
+        
+        # Month
+        ttk.Label(control_frame, text="Mes:").pack(side='left')
+        self.month_var = tk.StringVar()
+        self.month_names = [
+            "Enero", "Febrero", "Marzo", "Abril",
+            "Mayo", "Junio", "Julio", "Agosto", 
+            "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        ]
+        month_combo = ttk.Combobox(control_frame, textvariable=self.month_var,
+                                  values=self.month_names, width=12, state="readonly")
+        month_combo.pack(side='left', padx=5)
+        
+        # Set initial month and bind change event
+        self.month_var.set(self.month_names[self.selected_date.month - 1])
+        month_combo.bind('<<ComboboxSelected>>', lambda e: self._update_calendar())
+        self.month_var.trace('w', lambda *args: self._update_calendar())  # Monitor changes
+        
+        # Calendar grid
+        self.calendar_frame = ttk.Frame(main_frame)
+        self.calendar_frame.pack(fill='both', expand=True, pady=(0, 10))
+        
+        # Selected date display
+        self.selected_label = ttk.Label(main_frame, 
+                                       text=f"Fecha seleccionada: {self.selected_date.strftime('%Y-%m-%d')}",
+                                       font=('Arial', 10, 'bold'))
+        self.selected_label.pack(pady=(0, 10))
+        
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x')
+        
+        ttk.Button(button_frame, text="Hoy", 
+                  command=self._select_today).pack(side='left', padx=(0, 10))
+        
+        ttk.Button(button_frame, text="Aceptar", 
+                  command=self._accept).pack(side='right', padx=(10, 0))
+        
+        ttk.Button(button_frame, text="Cancelar", 
+                  command=self._cancel).pack(side='right')
+        
+        # Force initial calendar update after a short delay
+        self.dialog.after(100, self._force_initial_update)
+    
+    def _force_initial_update(self):
+        """Force initial calendar update."""
+        # Ensure month variable is properly set
+        if not self.month_var.get():
+            self.month_var.set(self.month_names[self.selected_date.month - 1])
+        
+        # Force calendar update
+        self._update_calendar()
+    
+    def _update_calendar(self):
+        """Update calendar display."""
+        try:
+            # Prevent recursive calls during initialization
+            if not hasattr(self, 'updating_calendar'):
+                self.updating_calendar = False
+            
+            if self.updating_calendar:
+                return
+                
+            self.updating_calendar = True
+            
+            # Get year and month
+            year_str = self.year_var.get()
+            month_str = self.month_var.get()
+            
+            if not year_str or not month_str or month_str not in self.month_names:
+                return
+                
+            year = int(year_str)
+            month = self.month_names.index(month_str) + 1  # Convert to 1-12
+            
+            # Clear previous calendar
+            for widget in self.calendar_frame.winfo_children():
+                widget.destroy()
+            
+            # Day headers
+            days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+            for i, day in enumerate(days):
+                label = ttk.Label(self.calendar_frame, text=day, font=('Arial', 9, 'bold'))
+                label.grid(row=0, column=i, padx=1, pady=1)
+            
+            # Calendar days
+            cal = calendar.monthcalendar(year, month)
+            for week_num, week in enumerate(cal, 1):
+                for day_num, day in enumerate(week):
+                    if day == 0:
+                        continue
+                    
+                    # Check if this is the selected date
+                    is_selected = (year == self.selected_date.year and 
+                                 month == self.selected_date.month and 
+                                 day == self.selected_date.day)
+                    
+                    # Check if date is in the future (disable future dates)
+                    is_future = date(year, month, day) > date.today()
+                    
+                    if is_future:
+                        # Future date - disabled
+                        btn = ttk.Label(self.calendar_frame, text=str(day),
+                                       foreground='gray')
+                    else:
+                        # Valid date - clickable
+                        btn = ttk.Button(self.calendar_frame, text=str(day),
+                                        width=3,
+                                        command=lambda d=day, y=year, m=month: self._select_date(y, m, d))
+                        
+                        if is_selected:
+                            btn.configure(style='Accent.TButton')
+                    
+                    btn.grid(row=week_num, column=day_num, padx=1, pady=1, sticky='nsew')
+            
+            # Configure grid weights
+            for i in range(7):
+                self.calendar_frame.columnconfigure(i, weight=1)
+                
+        except (ValueError, IndexError) as e:
+            # Log error but don't crash
+            pass
+        finally:
+            self.updating_calendar = False
+    
+    def _select_date(self, year, month, day):
+        """Select a specific date."""
+        try:
+            self.selected_date = date(year, month, day)
+            self.selected_label.configure(text=f"Fecha seleccionada: {self.selected_date.strftime('%Y-%m-%d')}")
+            self._update_calendar()
+        except ValueError:
+            pass
+    
+    def _select_today(self):
+        """Select today's date."""
+        today = date.today()
+        self.selected_date = today
+        self.selected_label.configure(text=f"Fecha seleccionada: {today.strftime('%Y-%m-%d')}")
+        
+        # Update year and month (this will trigger calendar update)
+        self.year_var.set(str(today.year))
+        self.month_var.set(self.month_names[today.month - 1])
+    
+    def _accept(self):
+        """Accept selected date."""
+        self.result = self.selected_date
+        self.dialog.destroy()
+    
+    def _cancel(self):
+        """Cancel date selection."""
+        self.result = None
+        self.dialog.destroy()
 
 
 class MainWindow:
@@ -214,30 +414,43 @@ class MainWindow:
                                font=("Arial", 10, "bold"))
         start_label.grid(row=1, column=0, sticky="w", pady=8)
         
-        self.start_date_entry = DateEntry(date_frame, width=15, 
-                                         background='#2E86AB',
-                                         foreground='white', 
-                                         borderwidth=1,
-                                         date_pattern='yyyy-mm-dd',
-                                         maxdate=date.today(),
-                                         font=('Arial', 10))
-        self.start_date_entry.grid(row=1, column=1, sticky="w", pady=8, padx=(15, 0))
+        # Create date input with button
+        start_date_frame = ttk.Frame(date_frame)
+        start_date_frame.grid(row=1, column=1, sticky="w", pady=8, padx=(15, 0))
+        
+        self.start_date_var = tk.StringVar(value=date.today().strftime('%Y-%m-%d'))
+        self.start_date_entry = ttk.Entry(start_date_frame, textvariable=self.start_date_var,
+                                         width=12, state='readonly',
+                                         style="Modern.TEntry")
+        self.start_date_entry.pack(side='left', padx=(0, 5))
+        
+        start_cal_button = ttk.Button(start_date_frame, text="📅",
+                                     command=lambda: self._open_date_picker('start'),
+                                     width=3)
+        start_cal_button.pack(side='left')
         
         end_label = ttk.Label(date_frame, text="Fecha fin:", 
                              font=("Arial", 10, "bold"))
         end_label.grid(row=2, column=0, sticky="w", pady=8)
         
-        self.end_date_entry = DateEntry(date_frame, width=15,
-                                       background='#2E86AB',
-                                       foreground='white', 
-                                       borderwidth=1,
-                                       date_pattern='yyyy-mm-dd',
-                                       maxdate=date.today(),
-                                       font=('Arial', 10))
-        self.end_date_entry.grid(row=2, column=1, sticky="w", pady=8, padx=(15, 0))
+        # Create end date input with button
+        end_date_frame = ttk.Frame(date_frame)
+        end_date_frame.grid(row=2, column=1, sticky="w", pady=8, padx=(15, 0))
+        
+        self.end_date_var = tk.StringVar(value=date.today().strftime('%Y-%m-%d'))
+        self.end_date_entry = ttk.Entry(end_date_frame, textvariable=self.end_date_var,
+                                       width=12, state='readonly',
+                                       style="Modern.TEntry")
+        self.end_date_entry.pack(side='left', padx=(0, 5))
+        
+        self.end_cal_button = ttk.Button(end_date_frame, text="📅",
+                                        command=lambda: self._open_date_picker('end'),
+                                        width=3)
+        self.end_cal_button.pack(side='left')
         
         # Initially disable end date
         self.end_date_entry.configure(state="disabled")
+        self.end_cal_button.configure(state="disabled")
         
         # Output directory frame with modern styling
         output_frame = ttk.LabelFrame(main_frame, text="📁 Carpeta de Destino", 
@@ -385,8 +598,40 @@ class MainWindow:
         """Handle date mode change (single vs range)."""
         if self.date_mode.get() == "single":
             self.end_date_entry.configure(state="disabled")
+            self.end_cal_button.configure(state="disabled")
         else:
-            self.end_date_entry.configure(state="normal")
+            self.end_date_entry.configure(state="readonly")
+            self.end_cal_button.configure(state="normal")
+    
+    def _open_date_picker(self, date_type):
+        """Open date picker dialog."""
+        try:
+            # Get current date from entry
+            if date_type == 'start':
+                current_date_str = self.start_date_var.get()
+            else:
+                current_date_str = self.end_date_var.get()
+            
+            try:
+                current_date = datetime.strptime(current_date_str, '%Y-%m-%d').date()
+            except:
+                current_date = date.today()
+            
+            # Open date picker
+            picker = SimpleDatePicker(self.root, current_date)
+            self.root.wait_window(picker.dialog)
+            
+            # Update date if user selected one
+            if picker.result:
+                date_str = picker.result.strftime('%Y-%m-%d')
+                if date_type == 'start':
+                    self.start_date_var.set(date_str)
+                else:
+                    self.end_date_var.set(date_str)
+                    
+        except Exception as e:
+            self._log(f"Error opening date picker: {e}")
+            messagebox.showerror("Error", f"Error al abrir calendario: {e}")
     
     def _select_output_directory(self):
         """Open directory selection dialog."""
@@ -438,10 +683,10 @@ class MainWindow:
             return False, "Debe configurar la base de datos primero"
         
         # Validate dates
-        start_date = self.start_date_entry.get_date().strftime('%Y-%m-%d')
+        start_date = self.start_date_var.get()
         
         if self.date_mode.get() == "range":
-            end_date = self.end_date_entry.get_date().strftime('%Y-%m-%d')
+            end_date = self.end_date_var.get()
             is_valid, message = self.query_builder.validate_date_range(start_date, end_date)
             if not is_valid:
                 return False, message
@@ -482,8 +727,8 @@ class MainWindow:
         """Run report generation in background thread."""
         try:
             # Prepare dates
-            start_date = self.start_date_entry.get_date().strftime('%Y-%m-%d')
-            end_date = (self.end_date_entry.get_date().strftime('%Y-%m-%d') 
+            start_date = self.start_date_var.get()
+            end_date = (self.end_date_var.get() 
                        if self.date_mode.get() == "range" else start_date)
             
             self.root.after(0, lambda: self._log(f"Iniciando extracción para período: {start_date} - {end_date}"))
