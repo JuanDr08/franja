@@ -769,37 +769,48 @@ class MainWindow:
             
             self.root.after(0, lambda: self._log(f"Terceros encontrados: {len(partners_data)}"))
             
+            # Get credit notes data
+            self.root.after(0, lambda: self._update_status("Extrayendo datos de notas de crédito...", "blue"))
+            
+            credit_notes_query = self.query_builder.get_credit_notes_query()
+            credit_notes_data, credit_notes_columns = db_connection.execute_query(
+                credit_notes_query, (start_date, end_date)
+            )
+            
+            self.root.after(0, lambda: self._log(f"Notas de crédito encontradas: {len(credit_notes_data)}"))
+            
             # Close database connection
             db_connection.close_pool()
             
-            # Check if we have data
-            if not invoices_data and not partners_data:
-                raise Exception("No se encontraron datos para el período seleccionado")
-            
-            # Generate Excel reports
+            # Generate Excel reports (always generate all 3 files, even if empty)
             self.root.after(0, lambda: self._update_status("Generando archivos Excel...", "blue"))
             
             excel_generator = ExcelReportGenerator(self.output_directory.get())
             generated_files = []
             
-            # Generate invoices report
-            if invoices_data:
-                invoices_file = excel_generator.generate_invoices_report(
-                    invoices_data, invoices_columns, start_date, end_date
-                )
-                generated_files.append(invoices_file)
-                self.root.after(0, lambda: self._log(f"Reporte de facturas generado: {os.path.basename(invoices_file)}"))
+            # Generate invoices report (always generate, even if empty)
+            invoices_file = excel_generator.generate_invoices_report(
+                invoices_data, invoices_columns, start_date, end_date
+            )
+            generated_files.append(invoices_file)
+            self.root.after(0, lambda: self._log(f"Reporte de facturas generado: {os.path.basename(invoices_file)}"))
             
-            # Generate partners report  
-            if partners_data:
-                partners_file = excel_generator.generate_partners_report(
-                    partners_data, partners_columns, start_date, end_date
-                )
-                generated_files.append(partners_file)
-                self.root.after(0, lambda: self._log(f"Reporte de terceros generado: {os.path.basename(partners_file)}"))
+            # Generate partners report (always generate, even if empty)
+            partners_file = excel_generator.generate_partners_report(
+                partners_data, partners_columns, start_date, end_date
+            )
+            generated_files.append(partners_file)
+            self.root.after(0, lambda: self._log(f"Reporte de terceros generado: {os.path.basename(partners_file)}"))
+            
+            # Generate credit notes report (always generate, even if empty)
+            credit_notes_file = excel_generator.generate_credit_notes_report(
+                credit_notes_data, credit_notes_columns, start_date, end_date
+            )
+            generated_files.append(credit_notes_file)
+            self.root.after(0, lambda: self._log(f"Reporte de notas de crédito generado: {os.path.basename(credit_notes_file)}"))
             
             # Save query history
-            total_records = len(invoices_data) + len(partners_data)
+            total_records = len(invoices_data) + len(partners_data) + len(credit_notes_data)
             execution_time = 0  # Would need to track actual time
             self.config_manager.save_query_history(start_date, end_date, total_records, execution_time)
             

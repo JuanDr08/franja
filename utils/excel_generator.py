@@ -180,11 +180,11 @@ class ExcelReportGenerator:
             # Check if file exists and is in use
             self._check_file_availability(file_path)
             
-            # Create styled workbook
+            # Create styled workbook (even if data is empty)
             wb = self._create_styled_workbook(data, columns, "Facturas")
             
             # Add metadata sheet
-            self._add_metadata_sheet(wb, "Invoices Report", start_date, end_date, len(data))
+            self._add_metadata_sheet(wb, "Facturas Report", start_date, end_date, len(data))
             
             # Save file
             wb.save(file_path)
@@ -222,11 +222,11 @@ class ExcelReportGenerator:
             # Check if file exists and is in use
             self._check_file_availability(file_path)
             
-            # Create styled workbook
+            # Create styled workbook (even if data is empty)
             wb = self._create_styled_workbook(data, columns, "Terceros")
             
             # Add metadata sheet
-            self._add_metadata_sheet(wb, "Partners Report", start_date, end_date, len(data))
+            self._add_metadata_sheet(wb, "Terceros Report", start_date, end_date, len(data))
             
             # Save file
             wb.save(file_path)
@@ -236,6 +236,48 @@ class ExcelReportGenerator:
             
         except Exception as e:
             logging.error(f"Error generating partners report: {e}")
+            raise
+
+    def generate_credit_notes_report(self, data: List[Tuple], columns: List[str], 
+                                    start_date: str, end_date: str) -> str:
+        """
+        Generate credit notes Excel report.
+        
+        Args:
+            data: Credit notes data as list of tuples
+            columns: Column names
+            start_date: Start date string
+            end_date: End date string
+            
+        Returns:
+            Path to generated Excel file
+        """
+        try:
+            # Create filename
+            if start_date == end_date:
+                filename = f"notas_credito_{start_date}.xlsx"
+            else:
+                filename = f"notas_credito_{start_date}_{end_date}.xlsx"
+            
+            file_path = os.path.join(self.output_directory, filename)
+            
+            # Check if file exists and is in use
+            self._check_file_availability(file_path)
+            
+            # Create styled workbook (even if data is empty)
+            wb = self._create_styled_workbook(data, columns, "Notas de Crédito")
+            
+            # Add metadata sheet
+            self._add_metadata_sheet(wb, "Credit Notes Report", start_date, end_date, len(data))
+            
+            # Save file
+            wb.save(file_path)
+            
+            logging.info(f"Credit notes report generated: {file_path}")
+            return file_path
+            
+        except Exception as e:
+            logging.error(f"Error generating credit notes report: {e}")
             raise
     
     def _add_metadata_sheet(self, workbook: openpyxl.Workbook, report_type: str, 

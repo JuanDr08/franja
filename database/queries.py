@@ -15,22 +15,23 @@ class QueryBuilder:
         """
         return """
         SELECT DISTINCT
-            am.name AS numero_factura,
+            am.sequence_prefix AS prefijo,
+            am.sequence_number AS consecutivo,
             rp.vat AS numero_identificacion,
             COALESCE(am.invoice_date, am.date) AS fecha_factura,
             aaa.code AS codigo_centro_costo,
             aa.code AS codigo_cuenta,
-
+            
             -- VALOR UNIFICADO (siempre positivo)
             COALESCE(NULLIF(aml.debit, 0), NULLIF(aml.credit, 0), 0) AS valor,
-
+            
             -- NATURALEZA DE CUENTA
             CASE 
                 WHEN aml.credit > 0 THEN 'C'
                 WHEN aml.debit > 0 THEN 'D'
                 ELSE 'N'
             END AS naturaleza_cuenta,
-
+            
             -- N_INTERNACIONAL
             'F' AS n_internacional
 
@@ -42,59 +43,81 @@ class QueryBuilder:
             LEFT JOIN account_analytic_account aaa ON am.user_analytic_account_id = aaa.id
 
         WHERE 
-            am.move_type IN ('out_invoice', 'in_invoice', 'out_refund', 'in_refund')
+            am.move_type IN ('out_invoice', 'in_invoice')
             AND COALESCE(am.invoice_date, am.date) BETWEEN %s AND %s
             AND am.state = 'posted'
 
+            AND NOT (
+                aa.code IS NULL 
+                AND (aml.debit IS NULL OR aml.debit = 0) 
+                AND (aml.credit IS NULL OR aml.credit = 0)
+            )
+
         ORDER BY 
-            COALESCE(am.invoice_date, am.date) DESC, 
-            am.name ASC;
+            COALESCE(am.invoice_date, am.date) DESC;
         """
     
     @staticmethod
     def get_partners_query() -> str:
         """
-        Get the SQL query for extracting partner (third parties) data.
+        Get the SQL query for extracting partner (third parties) data based on creation date.
         
         Returns:
             Parameterized SQL query string
         """
         return """
         SELECT DISTINCT
-            -- DATOS BÁSICOS DEL TERCERO
-            rp.id AS tercero_id,
-            rp.name AS nombre,
-            
-            -- NOMBRE COMPLETO (para personas naturales)
-            CASE 
-                WHEN rp.is_company = false AND rp.first_name IS NOT NULL THEN
-                    TRIM(CONCAT_WS(' ', rp.first_name, rp.other_names, rp.surname, rp.second_surname))
-                ELSE rp.name
-            END AS nombre_completo,
-            
-            -- TIPO DE IDENTIFICACIÓN
-            COALESCE(lit.name->>'en_US', 'Sin tipo') AS tipo_identificacion,
-            
-            -- IDENTIFICACIÓN
-            COALESCE(rp.vat, 'Sin identificación') AS identidad,
-
+            rp.name AS nombre_completo,
             CASE 
                 WHEN rp.is_company = true THEN 'Empresa'
                 WHEN rp.is_company = false THEN 'Persona'
                 ELSE 'No definido'
             END AS tipo_empresa,
-            
-            -- CONTACTO
-            COALESCE(rp.email_normalized, '') AS mail,
-            COALESCE(rp.phone, '') AS movil,
-            
-            -- DIRECCIÓN
+            CASE 
+                WHEN rp.is_company = true THEN '1'
+                WHEN rp.is_company = false THEN '0'
+                ELSE 'No definido'
+            END AS naturaleza,
             CONCAT_WS(', ', 
                 NULLIF(TRIM(rp.street), ''), 
                 NULLIF(TRIM(rp.street2), ''),
                 NULLIF(TRIM(rp.city), '')
-            ) AS direccion
-
+            ) AS direccion,
+            COALESCE(rp.email_edi, '') AS email,
+            
+            -- TIPO DE IDENTIFICACIÓN
+            COALESCE(lit.name->>'en_US', 'Sin tipo') AS tipo_identificacion,
+            
+            -- IDENTIFICACIÓN (CON LÓGICA DE GUIÓN)
+            CASE 
+                WHEN rp.is_company = true 
+                    AND rp.vat IS NOT NULL 
+                    AND LENGTH(TRIM(rp.vat)) > 1 
+                    AND SUBSTRING(TRIM(rp.vat), LENGTH(TRIM(rp.vat)) - 1, 1) = '-' THEN 
+                    LEFT(TRIM(rp.vat), LENGTH(TRIM(rp.vat)) - 2)  -- Quita los dos últimos caracteres (guión + dígito)
+                ELSE COALESCE(rp.vat, 'Sin identificación')  -- Mantiene completo si no cumple condiciones
+            END AS identidad,
+            
+            -- DÍGITO DE VERIFICACIÓN (CON LÓGICA DE GUIÓN)
+            CASE 
+                WHEN rp.is_company = true 
+                    AND rp.vat IS NOT NULL 
+                    AND LENGTH(TRIM(rp.vat)) > 1 
+                    AND SUBSTRING(TRIM(rp.vat), LENGTH(TRIM(rp.vat)) - 1, 1) = '-' THEN 
+                    RIGHT(TRIM(rp.vat), 1)  -- Extrae el último dígito
+                ELSE '0'  -- Por defecto 0 si no cumple condiciones
+            END AS dv,
+            
+            -- CLASE
+            CASE 
+                WHEN rp.is_company = true THEN 'A'  -- Empresa = A
+                ELSE 'C'  -- Persona = C
+            END AS clase,
+            
+            -- CONTACTO
+            COALESCE(rp.phone, '') AS movil,
+            'CLIENTES' AS CARTERA
+            
         FROM res_partner rp
             LEFT JOIN l10n_latam_identification_type lit ON rp.l10n_latam_identification_type_id = lit.id
             
@@ -108,14 +131,78 @@ class QueryBuilder:
             -- SOLO DOCUMENTOS CONTABILIZADOS
             AND am.state = 'posted'
             
-            -- FILTRO POR FECHAS
-            AND COALESCE(am.invoice_date, am.date) BETWEEN %s AND %s
+            -- FILTRO POR FECHA DE CREACIÓN DEL TERCERO
+            AND rp.create_date::date BETWEEN %s AND %s
             
             -- SOLO TERCEROS ACTIVOS
             AND rp.active = true
 
         ORDER BY 
             rp.name ASC;
+        """
+    
+    @staticmethod
+    def get_credit_notes_query() -> str:
+        """
+        Get the SQL query for extracting credit notes data.
+        
+        Returns:
+            Parameterized SQL query string
+        """
+        return """
+        SELECT DISTINCT
+            am.sequence_prefix AS prefijo,
+            am.sequence_number AS consecutivo,
+            rp.vat AS numero_identificacion,
+            COALESCE(am.invoice_date, am.date) AS fecha_factura,
+            aaa.code AS codigo_centro_costo,
+            aa.code AS codigo_cuenta,
+            
+            -- VALOR UNIFICADO (siempre positivo)
+            COALESCE(NULLIF(aml.debit, 0), NULLIF(aml.credit, 0), 0) AS valor,
+            
+            -- NATURALEZA DE CUENTA
+            CASE 
+                WHEN aml.credit > 0 THEN 'C'
+                WHEN aml.debit > 0 THEN 'D'
+                ELSE 'N'
+            END AS naturaleza_cuenta,
+            
+            -- N_INTERNACIONAL
+            'F' AS n_internacional,
+            
+            -- REFERENCIA A FACTURA ORIGINAL
+            CASE 
+                WHEN am.invoice_origin IS NOT NULL AND TRIM(am.invoice_origin) != '' 
+                THEN COALESCE(fo.name, am.invoice_origin)  -- Si encuentra la factura usa fo.name, sino usa invoice_origin tal como está
+                ELSE am.ref  -- Si invoice_origin es nulo, usa el campo ref
+            END AS invoice_ref
+
+        FROM account_move am
+            LEFT JOIN res_partner rp ON am.partner_id = rp.id
+            LEFT JOIN l10n_latam_identification_type lit ON rp.l10n_latam_identification_type_id = lit.id
+            LEFT JOIN account_move_line aml ON am.id = aml.move_id
+            LEFT JOIN account_account aa ON aml.account_id = aa.id
+            LEFT JOIN account_analytic_account aaa ON am.user_analytic_account_id = aaa.id
+            
+            -- JOIN con factura original usando invoice_origin
+            LEFT JOIN account_move fo ON am.invoice_origin = fo.invoice_origin
+                                       AND fo.move_type IN ('out_invoice', 'in_invoice')
+                                       AND fo.state = 'posted'
+
+        WHERE 
+            am.move_type IN ('out_refund', 'in_refund')
+            AND COALESCE(am.invoice_date, am.date) BETWEEN %s AND %s
+            AND am.state = 'posted'
+
+            AND NOT (
+                aa.code IS NULL 
+                AND (aml.debit IS NULL OR aml.debit = 0) 
+                AND (aml.credit IS NULL OR aml.credit = 0)
+            )
+
+        ORDER BY 
+            COALESCE(am.invoice_date, am.date) DESC;
         """
     
     @staticmethod
