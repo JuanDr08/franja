@@ -173,10 +173,17 @@ class QueryBuilder:
             
             -- REFERENCIA A FACTURA ORIGINAL
             CASE 
-                WHEN am.invoice_origin IS NOT NULL AND TRIM(am.invoice_origin) != '' 
-                THEN COALESCE(fo.name, am.invoice_origin)  -- Si encuentra la factura usa fo.name, sino usa invoice_origin tal como está
-                ELSE am.ref  -- Si invoice_origin es nulo, usa el campo ref
-            END AS invoice_ref
+                WHEN am.invoice_origin IS NOT NULL AND TRIM(am.invoice_origin) != '' AND fo.sequence_prefix IS NOT NULL
+                THEN fo.sequence_prefix  -- Prefijo de la factura original encontrada
+                ELSE COALESCE(am.ref, am.invoice_origin, '')  -- Fallback si no se encuentra
+            END AS prefijo_factura_original,
+            
+            -- CONSECUTIVO DE FACTURA ORIGINAL
+            CASE 
+                WHEN am.invoice_origin IS NOT NULL AND TRIM(am.invoice_origin) != '' AND fo.sequence_number IS NOT NULL
+                THEN fo.sequence_number  -- Consecutivo de la factura original encontrada
+                ELSE NULL  -- NULL si no se encuentra la factura
+            END AS consecutivo_factura_original
 
         FROM account_move am
             LEFT JOIN res_partner rp ON am.partner_id = rp.id
