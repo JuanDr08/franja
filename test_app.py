@@ -111,14 +111,14 @@ def test_excel_generator():
             
             # Test with dummy data
             dummy_data = [
-                ('INV001', '2024-01-01', '123456789', 'CC001', 'AC001', 1000.00, 'D', 'F'),
-                ('INV002', '2024-01-02', '987654321', 'CC002', 'AC002', 2000.00, 'C', 'F'),
+                ('INV001', '2024-01-01', '123456789', 'CC001', 'AC001', 1000.00, 'D'),
+                ('INV002', '2024-01-02', '987654321', 'CC002', 'AC002', 2000.00, 'C'),
             ]
             
             dummy_columns = [
                 'numero_factura', 'fecha_factura', 'numero_identificacion',
                 'codigo_centro_costo', 'codigo_cuenta', 'valor', 
-                'naturaleza_cuenta', 'n_internacional'
+                'naturaleza_cuenta'
             ]
             
             # Generate test report

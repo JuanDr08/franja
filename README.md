@@ -119,7 +119,7 @@ franjaApp/
 - **`facturas_[fecha].xlsx`** - Datos de facturación con campos:
   - número_factura, fecha_factura, numero_identificacion
   - codigo_centro_costo, codigo_cuenta, valor
-  - naturaleza_cuenta, n_internacional
+  - naturaleza_cuenta
 
 - **`terceros_[fecha].xlsx`** - Datos de terceros con campos:
   - nombre, tipo_identificacion, identidad

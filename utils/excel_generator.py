@@ -51,13 +51,13 @@ class ExcelReportGenerator:
         Returns:
             Styled openpyxl Workbook
         """
-        # Create DataFrame - keep data as-is from database
+        # Create DataFrame and format dates
         df = pd.DataFrame(data, columns=columns)
         
-        # Convert date columns to strings to prevent Excel auto-conversion
+        # Convert date columns from yyyy-MM-dd to dd/MM/yyyy format
         for col in columns:
             if 'fecha' in col.lower():
-                df[col] = df[col].astype(str)
+                df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%d/%m/%Y')
         
         # Create workbook and worksheet
         wb = openpyxl.Workbook()
@@ -72,9 +72,9 @@ class ExcelReportGenerator:
         for row_idx, row_data in enumerate(df.values, 2):
             for col_idx, cell_value in enumerate(row_data, 1):
                 cell = ws.cell(row=row_idx, column=col_idx)
-                # Force all date fields to be text
+                # Force all date fields to be text in dd/MM/yyyy format
                 if 'fecha' in columns[col_idx-1].lower():
-                    cell.value = str(cell_value)
+                    cell.value = str(cell_value) if cell_value and str(cell_value) != 'NaT' else ''
                     cell.data_type = 's'  # Force string type
                 else:
                     cell.value = cell_value
@@ -131,12 +131,12 @@ class ExcelReportGenerator:
         for col_idx, column_name in enumerate(columns, 1):
             column_letter = openpyxl.utils.get_column_letter(col_idx)
             
-            # Format date columns - ensure they stay as text
+            # Format date columns - ensure they stay as text in dd/MM/yyyy format
             if 'fecha' in column_name.lower():
                 for row in range(2, worksheet.max_row + 1):
                     cell = worksheet[f"{column_letter}{row}"]
-                    if cell.value:
-                        # Ensure it's stored as text and displayed as text
+                    if cell.value and str(cell.value) != 'NaT':
+                        # Ensure it's stored as text and displayed as text in dd/MM/yyyy format
                         cell.value = str(cell.value)
                         cell.data_type = 's'  # String data type
                         cell.number_format = '@'  # Text display format
@@ -149,7 +149,7 @@ class ExcelReportGenerator:
                         cell.number_format = '#,##0.00'
             
             # Center alignment for specific columns
-            elif column_name.lower() in ['naturaleza_cuenta', 'n_internacional', 'tipo_empresa']:
+            elif column_name.lower() in ['naturaleza_cuenta', 'tipo_empresa']:
                 for row in range(2, worksheet.max_row + 1):
                     cell = worksheet[f"{column_letter}{row}"]
                     cell.alignment = Alignment(horizontal="center")

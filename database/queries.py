@@ -30,10 +30,7 @@ class QueryBuilder:
                 WHEN aml.credit > 0 THEN 'C'
                 WHEN aml.debit > 0 THEN 'D'
                 ELSE 'N'
-            END AS naturaleza_cuenta,
-            
-            -- N_INTERNACIONAL
-            'F' AS n_internacional
+            END AS naturaleza_cuenta
 
         FROM account_move am
             LEFT JOIN res_partner rp ON am.partner_id = rp.id
@@ -167,9 +164,6 @@ class QueryBuilder:
                 WHEN aml.debit > 0 THEN 'D'
                 ELSE 'N'
             END AS naturaleza_cuenta,
-            
-            -- N_INTERNACIONAL
-            'F' AS n_internacional,
             
             -- REFERENCIA A FACTURA ORIGINAL
             CASE 
