@@ -149,7 +149,7 @@ class ExcelReportGenerator:
                         cell.number_format = '#,##0.00'
             
             # Center alignment for specific columns
-            elif column_name.lower() in ['naturaleza_cuenta', 'tipo_empresa']:
+            elif column_name.lower() in ['naturaleza_cuenta', 'tipo_empresa', 'n_vendedor']:
                 for row in range(2, worksheet.max_row + 1):
                     cell = worksheet[f"{column_letter}{row}"]
                     cell.alignment = Alignment(horizontal="center")

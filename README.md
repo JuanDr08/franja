@@ -125,6 +125,13 @@ franjaApp/
   - nombre, tipo_identificacion, identidad
   - tipo_empresa, mail, movil, direccion
 
+- **`notas_credito_[fecha].xlsx`** - Datos de notas de crédito con campos:
+  - prefijo, consecutivo, numero_identificacion, fecha_factura
+  - codigo_centro_costo, codigo_cuenta (con transformación automática), valor, naturaleza_cuenta
+  - prefijo_factura_original, consecutivo_factura_original
+  - n_vendedor (valor constante: 900099819)
+  - **Nota:** Los códigos de cuenta 41353801, 41353802, 41353803 se transforman automáticamente a 41753801, 41753802, 41753803 respectivamente
+
 ## 🔧 Construcción del Ejecutable
 
 ### Automática (Recomendado)

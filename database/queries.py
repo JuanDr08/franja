@@ -153,7 +153,13 @@ class QueryBuilder:
             rp.vat AS numero_identificacion,
             COALESCE(am.invoice_date, am.date) AS fecha_factura,
             aaa.code AS codigo_centro_costo,
-            aa.code AS codigo_cuenta,
+            
+            -- CODIGO CUENTA con lógica especial para notas de crédito
+            CASE 
+                WHEN aa.code IN ('41353801', '41353802', '41353803') THEN
+                    REPLACE(aa.code, '35', '75')  -- Cambia 41353801 -> 41753801, etc.
+                ELSE aa.code
+            END AS codigo_cuenta,
             
             -- VALOR UNIFICADO (siempre positivo)
             COALESCE(NULLIF(aml.debit, 0), NULLIF(aml.credit, 0), 0) AS valor,
@@ -177,7 +183,10 @@ class QueryBuilder:
                 WHEN am.invoice_origin IS NOT NULL AND TRIM(am.invoice_origin) != '' AND fo.sequence_number IS NOT NULL
                 THEN fo.sequence_number  -- Consecutivo de la factura original encontrada
                 ELSE NULL  -- NULL si no se encuentra la factura
-            END AS consecutivo_factura_original
+            END AS consecutivo_factura_original,
+            
+            -- N. VENDEDOR (campo constante)
+            '900099819' AS n_vendedor
 
         FROM account_move am
             LEFT JOIN res_partner rp ON am.partner_id = rp.id
