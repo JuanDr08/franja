@@ -21,6 +21,7 @@ class QueryBuilder:
             COALESCE(am.invoice_date, am.date) AS fecha_factura,
             aaa.code AS codigo_centro_costo,
             aa.code AS codigo_cuenta,
+            COALESCE(aml.name, '') AS concepto,
             
             -- VALOR UNIFICADO (siempre positivo)
             COALESCE(NULLIF(aml.debit, 0), NULLIF(aml.credit, 0), 0) AS valor,
@@ -160,6 +161,7 @@ class QueryBuilder:
                     REPLACE(aa.code, '35', '75')  -- Cambia 41353801 -> 41753801, etc.
                 ELSE aa.code
             END AS codigo_cuenta,
+            COALESCE(aml.name, '') AS concepto,
             
             -- VALOR UNIFICADO (siempre positivo)
             COALESCE(NULLIF(aml.debit, 0), NULLIF(aml.credit, 0), 0) AS valor,

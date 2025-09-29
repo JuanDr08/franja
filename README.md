@@ -118,7 +118,7 @@ franjaApp/
 
 - **`facturas_[fecha].xlsx`** - Datos de facturación con campos:
   - número_factura, fecha_factura, numero_identificacion
-  - codigo_centro_costo, codigo_cuenta, valor
+  - codigo_centro_costo, codigo_cuenta, concepto, valor
   - naturaleza_cuenta
 
 - **`terceros_[fecha].xlsx`** - Datos de terceros con campos:
@@ -127,7 +127,7 @@ franjaApp/
 
 - **`notas_credito_[fecha].xlsx`** - Datos de notas de crédito con campos:
   - prefijo, consecutivo, numero_identificacion, fecha_factura
-  - codigo_centro_costo, codigo_cuenta (con transformación automática), valor, naturaleza_cuenta
+  - codigo_centro_costo, codigo_cuenta (con transformación automática), concepto, valor, naturaleza_cuenta
   - prefijo_factura_original, consecutivo_factura_original
   - n_vendedor (valor constante: 900099819)
   - **Nota:** Los códigos de cuenta 41353801, 41353802, 41353803 se transforman automáticamente a 41753801, 41753802, 41753803 respectivamente
