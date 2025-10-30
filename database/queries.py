@@ -13,15 +13,26 @@ class QueryBuilder:
         Returns:
             Parameterized SQL query string
         """
+        # esta query extrae las facturas de venta y compra
+        # reemplaza los codigos de cuenta según la lógica definida
         return """
         SELECT DISTINCT
             am.sequence_prefix AS prefijo,
             am.sequence_number AS consecutivo,
             rp.vat AS numero_identificacion,
             COALESCE(am.invoice_date, am.date) AS fecha_factura,
+            am.amount_untaxed AS subtotal,
             aaa.code AS codigo_centro_costo,
-            aa.code AS codigo_cuenta,
-            COALESCE(aml.name, '') AS concepto,
+            -- aa.code AS codigo_cuenta,
+
+             -- CODIGO CUENTA con lógica especial para prefijo FVHE
+            CASE 
+                WHEN am.sequence_prefix != 'FVHE' AND aa.code = '13050503' THEN '11050501'  -- Si NO es FVHE Y código es 13050503, cambia a 11050501
+                ELSE aa.code  -- En todos los demás casos, mantiene código original
+            END AS codigo_cuenta,
+            
+            aml.name AS concepto,
+            
             
             -- VALOR UNIFICADO (siempre positivo)
             COALESCE(NULLIF(aml.debit, 0), NULLIF(aml.credit, 0), 0) AS valor,
@@ -44,6 +55,7 @@ class QueryBuilder:
             am.move_type IN ('out_invoice', 'in_invoice')
             AND COALESCE(am.invoice_date, am.date) BETWEEN %s AND %s
             AND am.state = 'posted'
+            AND am.ei_is_valid = true
 
             AND NOT (
                 aa.code IS NULL 
@@ -63,6 +75,10 @@ class QueryBuilder:
         Returns:
             Parameterized SQL query string
         """
+        # esta query extrae los terceros que han participado en facturación
+        # y que fueron creados en un rango de fechas específico
+        
+        
         return """
         SELECT DISTINCT
             rp.name AS nombre_completo,
@@ -129,6 +145,9 @@ class QueryBuilder:
             -- SOLO DOCUMENTOS CONTABILIZADOS
             AND am.state = 'posted'
             
+            -- SOLO FACTURAS VÁLIDAS ELECTRÓNICAMENTE
+            AND am.ei_is_valid = true
+            
             -- FILTRO POR FECHA DE CREACIÓN DEL TERCERO
             AND rp.create_date::date BETWEEN %s AND %s
             
@@ -147,21 +166,42 @@ class QueryBuilder:
         Returns:
             Parameterized SQL query string
         """
+        
+        # esta query extrae las notas de crédito de venta y compra
+        # reemplaza los codigos de cuenta según la lógica definida
         return """
         SELECT DISTINCT
             am.sequence_prefix AS prefijo,
             am.sequence_number AS consecutivo,
             rp.vat AS numero_identificacion,
             COALESCE(am.invoice_date, am.date) AS fecha_factura,
+            am.amount_untaxed AS subtotal,
             aaa.code AS codigo_centro_costo,
+            --aml.name AS concepto,
             
             -- CODIGO CUENTA con lógica especial para notas de crédito
             CASE 
-                WHEN aa.code IN ('41353801', '41353802', '41353803') THEN
+                WHEN aa.code IN ('41353801', '41353802', '41353803', '41353807') THEN
                     REPLACE(aa.code, '35', '75')  -- Cambia 41353801 -> 41753801, etc.
+                WHEN am.sequence_prefix != 'NCE' AND aa.code = '13050503' THEN '11050501'  -- Reemplaza 13050503 por 11050501, EXCEPTO si es NCE
+                WHEN am.sequence_prefix = 'NCE' AND aa.code = '42054501' THEN '52355001'  -- NUEVA REGLA: si es nota de crédito y cuenta 42054501 -> 52355001
+                WHEN am.sequence_prefix != 'NCE' AND aa.code = '42054501' THEN '41753806'  -- Reemplaza 42054501 por 42050501, EXCEPTO si es NCE
                 ELSE aa.code
             END AS codigo_cuenta,
-            COALESCE(aml.name, '') AS concepto,
+            CASE 
+                WHEN aml.name IS NULL OR aml.name = '' THEN 
+                    -- Usa prefijo y consecutivo de la factura original
+                    CASE 
+                        WHEN am.invoice_origin IS NOT NULL 
+                            AND TRIM(am.invoice_origin) != '' 
+                            AND fo.sequence_prefix IS NOT NULL 
+                            AND fo.sequence_number IS NOT NULL
+                        THEN CONCAT(fo.sequence_prefix, '-', fo.sequence_number)
+                        ELSE CONCAT(am.sequence_prefix, '-', am.name)  -- Fallback si no hay factura original
+                    END
+                ELSE 
+                    aml.name
+            END AS concepto,
             
             -- VALOR UNIFICADO (siempre positivo)
             COALESCE(NULLIF(aml.debit, 0), NULLIF(aml.credit, 0), 0) AS valor,
@@ -206,6 +246,7 @@ class QueryBuilder:
             am.move_type IN ('out_refund', 'in_refund')
             AND COALESCE(am.invoice_date, am.date) BETWEEN %s AND %s
             AND am.state = 'posted'
+            AND am.ei_is_valid = true
 
             AND NOT (
                 aa.code IS NULL 
