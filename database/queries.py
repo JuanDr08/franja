@@ -22,27 +22,30 @@ class QueryBuilder:
             rp.vat AS numero_identificacion,
             COALESCE(am.invoice_date, am.date) AS fecha_factura,
             am.amount_untaxed AS subtotal,
+            am.amount_total AS total_factura,
             aaa.code AS codigo_centro_costo,
             -- aa.code AS codigo_cuenta,
 
-             -- CODIGO CUENTA con lógica especial para prefijo FVHE
+            -- CODIGO CUENTA con lógica especial para prefijo FVHE
             CASE 
                 WHEN am.sequence_prefix != 'FVHE' AND aa.code = '13050503' THEN '11050501'  -- Si NO es FVHE Y código es 13050503, cambia a 11050501
                 ELSE aa.code  -- En todos los demás casos, mantiene código original
             END AS codigo_cuenta,
-            
+
             aml.name AS concepto,
-            
-            
+
             -- VALOR UNIFICADO (siempre positivo)
             COALESCE(NULLIF(aml.debit, 0), NULLIF(aml.credit, 0), 0) AS valor,
-            
+
             -- NATURALEZA DE CUENTA
             CASE 
                 WHEN aml.credit > 0 THEN 'C'
                 WHEN aml.debit > 0 THEN 'D'
                 ELSE 'N'
-            END AS naturaleza_cuenta
+            END AS naturaleza_cuenta,
+
+            -- VENDEDOR
+            COALESCE(rp_vendedor.name, 'Sin vendedor') AS vendedor
 
         FROM account_move am
             LEFT JOIN res_partner rp ON am.partner_id = rp.id
@@ -50,6 +53,10 @@ class QueryBuilder:
             LEFT JOIN account_move_line aml ON am.id = aml.move_id
             LEFT JOIN account_account aa ON aml.account_id = aa.id
             LEFT JOIN account_analytic_account aaa ON am.user_analytic_account_id = aaa.id
+
+            -- JOIN con res_users para el nombre del vendedor
+            LEFT JOIN res_users ru ON am.invoice_user_id = ru.id
+            LEFT JOIN res_partner rp_vendedor ON ru.partner_id = rp_vendedor.id
 
         WHERE 
             am.move_type IN ('out_invoice', 'in_invoice')
@@ -176,6 +183,7 @@ class QueryBuilder:
             rp.vat AS numero_identificacion,
             COALESCE(am.invoice_date, am.date) AS fecha_factura,
             am.amount_untaxed AS subtotal,
+            am.amount_total AS total_factura,
             aaa.code AS codigo_centro_costo,
             --aml.name AS concepto,
             
@@ -202,33 +210,35 @@ class QueryBuilder:
                 ELSE 
                     aml.name
             END AS concepto,
-            
+
             -- VALOR UNIFICADO (siempre positivo)
             COALESCE(NULLIF(aml.debit, 0), NULLIF(aml.credit, 0), 0) AS valor,
-            
+
             -- NATURALEZA DE CUENTA
             CASE 
                 WHEN aml.credit > 0 THEN 'C'
                 WHEN aml.debit > 0 THEN 'D'
                 ELSE 'N'
             END AS naturaleza_cuenta,
-            
+
             -- REFERENCIA A FACTURA ORIGINAL
             CASE 
                 WHEN am.invoice_origin IS NOT NULL AND TRIM(am.invoice_origin) != '' AND fo.sequence_prefix IS NOT NULL
                 THEN fo.sequence_prefix  -- Prefijo de la factura original encontrada
                 ELSE COALESCE(am.ref, am.invoice_origin, '')  -- Fallback si no se encuentra
             END AS prefijo_factura_original,
-            
+
             -- CONSECUTIVO DE FACTURA ORIGINAL
             CASE 
                 WHEN am.invoice_origin IS NOT NULL AND TRIM(am.invoice_origin) != '' AND fo.sequence_number IS NOT NULL
                 THEN fo.sequence_number  -- Consecutivo de la factura original encontrada
                 ELSE NULL  -- NULL si no se encuentra la factura
             END AS consecutivo_factura_original,
-            
-            -- N. VENDEDOR (campo constante)
-            '900099819' AS n_vendedor
+
+            -- N. VENDEDOR
+            '900099819' AS n_vendedor,
+
+            COALESCE(rp_vendedor.name, 'Sin vendedor') AS vendedor
 
         FROM account_move am
             LEFT JOIN res_partner rp ON am.partner_id = rp.id
@@ -236,11 +246,15 @@ class QueryBuilder:
             LEFT JOIN account_move_line aml ON am.id = aml.move_id
             LEFT JOIN account_account aa ON aml.account_id = aa.id
             LEFT JOIN account_analytic_account aaa ON am.user_analytic_account_id = aaa.id
-            
+
             -- JOIN con factura original usando invoice_origin
             LEFT JOIN account_move fo ON am.invoice_origin = fo.invoice_origin
-                                       AND fo.move_type IN ('out_invoice', 'in_invoice')
-                                       AND fo.state = 'posted'
+                                        AND fo.move_type IN ('out_invoice', 'in_invoice')
+                                        AND fo.state = 'posted'
+
+            -- JOIN con res_users y luego con res_partner para obtener el nombre del vendedor
+            LEFT JOIN res_users ru ON am.invoice_user_id = ru.id
+            LEFT JOIN res_partner rp_vendedor ON ru.partner_id = rp_vendedor.id
 
         WHERE 
             am.move_type IN ('out_refund', 'in_refund')
